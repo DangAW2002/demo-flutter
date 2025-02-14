@@ -1,5 +1,7 @@
+import 'package:demo/providers/valentine_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:demo/constants/colors.dart';
+import 'package:provider/provider.dart';
 
 class EditProfile extends StatefulWidget {
   final Map<String, String> userData;
@@ -60,9 +62,16 @@ class _EditProfileState extends State<EditProfile> {
 
   @override
   Widget build(BuildContext context) {
+    final isValentine = context.watch<ValentineProvider>().isValentineMode;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Profile'),
+        title: Text(
+          'Edit Profile',
+          style: TextStyle(
+            color: isValentine ? Colors.pink[400] : null,
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -118,7 +127,8 @@ class _EditProfileState extends State<EditProfile> {
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor:
+                      isValentine ? Colors.pink[400] : AppColors.primary,
                   minimumSize: const Size(double.infinity, 50),
                 ),
                 child: const Text('Save Changes'),

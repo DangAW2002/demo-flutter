@@ -1,9 +1,11 @@
 // ignore_for_file: prefer_const_constructors
 
+import 'package:demo/providers/valentine_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:demo/pages/home.dart';
 import 'package:demo/pages/add_device.dart';
 import 'package:demo/pages/profile.dart';
+import 'package:provider/provider.dart';
 
 class BottomNavBar extends StatefulWidget {
   const BottomNavBar({super.key});
@@ -29,6 +31,8 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
   @override
   Widget build(BuildContext context) {
+    final isValentine = context.watch<ValentineProvider>().isValentineMode;
+
     return Scaffold(
       body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -47,8 +51,8 @@ class _BottomNavBarState extends State<BottomNavBar> {
           ),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.amber,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: isValentine ? Colors.pink[400] : Colors.amber,
+        unselectedItemColor: isValentine ? Colors.pink[200] : Colors.grey,
         onTap: _onItemTapped,
       ),
     );

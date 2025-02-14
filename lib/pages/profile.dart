@@ -1,9 +1,12 @@
+import 'package:demo/providers/valentine_provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/material.dart';
 import 'package:demo/constants/colors.dart';
 import 'package:provider/provider.dart';
 import 'package:demo/providers/theme_provider.dart';
 import 'package:demo/pages/edit_profile.dart';
-import 'package:demo/providers/auth_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:demo/providers/auth_provider.dart' as auth; // Change this line
 
 class Profile extends StatefulWidget {
   const Profile({super.key});
@@ -13,6 +16,8 @@ class Profile extends StatefulWidget {
 }
 
 class _ProfileState extends State<Profile> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   // Mock user data
   Map<String, String> userData = {
     'name': 'John Doe',
@@ -27,6 +32,15 @@ class _ProfileState extends State<Profile> {
   bool _notificationsEnabled = true;
   // bool _darkMode = false;
   bool _locationEnabled = true;
+
+  Future<void> _updateUserProfile(Map<String, String> updatedData) async {
+    final user = firebase_auth.FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await _firestore.collection('users').doc(user.uid).update({
+        'profile': updatedData,
+      });
+    }
+  }
 
   Widget _buildProfileHeader() {
     return Container(
@@ -126,6 +140,19 @@ class _ProfileState extends State<Profile> {
                 setState(() => _locationEnabled = value);
               },
             ),
+            Consumer<ValentineProvider>(
+              builder: (context, valentineProvider, child) {
+                return SwitchListTile(
+                  title: const Text('Valentine Mode'),
+                  subtitle: const Text('Special theme for Valentine\'s Day'),
+                  value: valentineProvider.isValentineMode,
+                  activeColor: Colors.pink[300],
+                  onChanged: (bool value) {
+                    valentineProvider.toggleValentineMode();
+                  },
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -151,7 +178,9 @@ class _ProfileState extends State<Profile> {
                   ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      context.read<AuthProvider>().logout();
+                      context
+                          .read<auth.AuthProvider>()
+                          .logout(); // Change this line
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,
@@ -174,6 +203,15 @@ class _ProfileState extends State<Profile> {
     );
   }
 
+  void _handleProfileUpdate(Map<String, String> updatedData) async {
+    await _updateUserProfile(updatedData);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -194,12 +232,7 @@ class _ProfileState extends State<Profile> {
                 setState(() {
                   userData = result;
                 });
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Profile updated successfully')),
-                  );
-                }
+                _handleProfileUpdate(result);
               }
             },
           ),

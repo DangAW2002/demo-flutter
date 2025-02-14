@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:demo/constants/colors.dart';
-import 'package:demo/widgets/bottom_navbar.dart';
 import 'package:demo/providers/auth_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:demo/pages/register.dart'; // Add this import
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,6 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -24,9 +25,28 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      context.read<AuthProvider>().login();
+      setState(() => _isLoading = true);
+
+      final success = await context.read<AuthProvider>().login(
+            _emailController.text.trim(),
+            _passwordController.text.trim(),
+          );
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+
+        if (!success) {
+          final error = context.read<AuthProvider>().error;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error ?? 'Login failed'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -163,7 +183,7 @@ class _LoginPageState extends State<LoginPage> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: _handleLogin,
+                      onPressed: _isLoading ? null : _handleLogin,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -171,10 +191,19 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text(
-                        'Login',
-                        style: TextStyle(fontSize: 16),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              'Login',
+                              style: TextStyle(fontSize: 16),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -193,7 +222,12 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         TextButton(
                           onPressed: () {
-                            // TODO: Navigate to register page
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const RegisterPage(),
+                              ),
+                            );
                           },
                           child: Text(
                             'Register',

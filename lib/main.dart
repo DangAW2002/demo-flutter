@@ -1,4 +1,5 @@
 import 'package:demo/pages/login.dart';
+import 'package:demo/providers/valentine_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:demo/widgets/bottom_navbar.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,8 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(
+            create: (_) => ValentineProvider()), // Add this line
       ],
       child: const MyApp(),
     ),
@@ -49,8 +52,8 @@ class MyApp extends StatelessWidget {
           themeMode:
               themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
           home: authProvider.isLoggedIn
-              ? const BottomNavBar()
-              : const LoginPage(),
+              ? const BottomNavBar() // Nếu đã đăng nhập thì vào trang chính
+              : const LoginPage(), // Nếu chưa đăng nhập thì vào trang login
         );
       },
     );

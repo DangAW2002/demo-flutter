@@ -1,6 +1,8 @@
+import 'package:demo/providers/valentine_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:demo/models/device.dart';
 import 'package:demo/constants/colors.dart';
+import 'package:provider/provider.dart';
 
 class AddDevice extends StatefulWidget {
   const AddDevice({super.key});
@@ -155,15 +157,23 @@ class _AddDeviceState extends State<AddDevice> {
 
   @override
   Widget build(BuildContext context) {
+    final isValentine = context.watch<ValentineProvider>().isValentineMode;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Device'),
+        title: Text(
+          'Add Device',
+          style: TextStyle(
+            color: isValentine ? Colors.pink[400] : null,
+          ),
+        ),
       ),
       body: _buildDeviceList(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddDeviceDialog,
         icon: const Icon(Icons.add),
         label: const Text('Add Device'),
+        backgroundColor: isValentine ? Colors.pink[300] : null,
       ),
     );
   }
