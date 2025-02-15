@@ -54,19 +54,19 @@ class AuthProvider with ChangeNotifier {
         password: password,
       );
 
-      // // Create user profile in Firestore
       if (userCredential.user != null) {
         await _firestore.collection('users').doc(userCredential.user!.uid).set({
           'email': email,
           'createdAt': Timestamp.now(),
-          'healthMetrics': {
-            'sleepHours': 8,
-            'heartRate': 75,
-            'bloodPressure': 120,
-            'bloodOxygen': 98,
-            'weight': 70.0,
-            'stress': 50,
+          'profile': {
+            'name': 'User',
+            'email': email,
+            'phone': '',
+            'age': '25',
+            'weight': '70 kg',
+            'height': '170 cm',
           }
+          // Xóa healthMetrics khỏi đây vì sẽ được lấy từ device
         });
         _isLoggedIn = true;
         notifyListeners();
@@ -91,9 +91,59 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> logout() async {
-    await _auth.signOut();
-    _isLoggedIn = false;
-    notifyListeners();
+  Future<bool> logout() async {
+    try {
+      await _auth.signOut();
+      _isLoggedIn = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteAccount(String password) async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        // 1. Re-authenticate user with password
+        try {
+          final credentials = EmailAuthProvider.credential(
+            email: user.email!,
+            password: password,
+          );
+          await user.reauthenticateWithCredential(credentials);
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'wrong-password') {
+            _error = 'Please type "Delete" to confirm';
+            notifyListeners();
+            return false;
+          }
+          _error = e.message ?? 'Authentication failed';
+          notifyListeners();
+          return false;
+        }
+
+        // 2. Delete Firestore data
+        await _firestore.collection('users').doc(user.uid).delete();
+
+        // 3. Delete authentication account
+        await user.delete();
+
+        // 4. Update state
+        _isLoggedIn = false;
+        notifyListeners();
+        return true;
+      }
+      _error = 'No user found';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Please type "Delete" to confirm';
+      notifyListeners();
+      return false;
+    }
   }
 }

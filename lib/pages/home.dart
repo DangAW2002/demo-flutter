@@ -8,6 +8,7 @@ import 'package:demo/constants/fonts.dart';
 import 'package:provider/provider.dart'; // Add this import
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:rxdart/rxdart.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -18,7 +19,6 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  late Stream<DocumentSnapshot> _metricsStream;
 
   // Health metrics variables
   int _sleepHours = 0;
@@ -31,31 +31,36 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      _metricsStream = _firestore.collection('users').doc(user.uid).snapshots();
-      _listenToDataChanges(); // Thêm dòng này
-      _initializeDataIfEmpty();
-    }
+    _initializeDataIfEmpty();
   }
 
-  void _listenToDataChanges() {
-    _metricsStream.listen((DocumentSnapshot snapshot) {
-      if (snapshot.exists) {
-        final data = snapshot.data() as Map<String, dynamic>;
-        if (data.containsKey('healthMetrics')) {
-          // Thêm kiểm tra này
-          final metrics = data['healthMetrics'] as Map<String, dynamic>;
-          setState(() {
-            _sleepHours = (metrics['sleepHours'] ?? 0).toInt();
-            _heartRate = (metrics['heartRate'] ?? 0).toInt();
-            _bloodPressure = (metrics['bloodPressure'] ?? 0).toInt();
-            _bloodOxygen = (metrics['bloodOxygen'] ?? 0).toInt();
-            _weight = (metrics['weight'] ?? 0).toDouble();
-            _stress = (metrics['stress'] ?? 0).toInt();
-          });
-        }
+  Stream<Map<String, dynamic>> _getMetricsStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream.value({});
+
+    return _firestore
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .flatMap((userDoc) {
+      if (!userDoc.exists || !userDoc.data()!.containsKey('device')) {
+        return Stream.value({});
       }
+
+      final deviceData = userDoc.data()!['device'] as Map<String, dynamic>;
+
+      // Create a stream for device document
+      return _firestore
+          .collection('devices')
+          .doc('device_type')
+          .collection(deviceData['type'])
+          .doc(deviceData['id'])
+          .snapshots()
+          .map((deviceDoc) {
+        if (!deviceDoc.exists) return {};
+        print('Device data updated: ${deviceDoc.data()}');
+        return deviceDoc.data() ?? {};
+      });
     });
   }
 
@@ -75,15 +80,6 @@ class _HomeState extends State<Home> {
           }
         }, SetOptions(merge: true));
       }
-    }
-  }
-
-  Future<void> _updateMetric(String field, dynamic value) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await _firestore.collection('users').doc(user.uid).update({
-        'healthMetrics.$field': value,
-      });
     }
   }
 
@@ -108,176 +104,193 @@ class _HomeState extends State<Home> {
               : const Color.fromARGB(100, 245, 245, 245)),
       body: Stack(
         children: [
-          SingleChildScrollView(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  const SizedBox(height: 25), // Increased top padding
-                  // Replace Image.asset with Stack for water effect
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        height: 200,
-                        width: 200,
-                        child: WaveWidget(
-                          config: CustomConfig(
-                            gradients: isDark
-                                ? [
-                                    [Colors.blue[900]!, Colors.blue[800]!],
-                                    [Colors.blue[800]!, Colors.blue[700]!],
-                                    [Colors.blue[700]!, Colors.blue[600]!],
-                                  ]
-                                : [
-                                    [Colors.blue[400]!, Colors.blue[300]!],
-                                    [Colors.blue[300]!, Colors.blue[200]!],
-                                    [Colors.blue[200]!, Colors.blue[100]!],
-                                  ],
-                            durations: [19440, 10800, 6000],
-                            heightPercentages: [0.65, 0.66, 0.68],
-                            blur: const MaskFilter.blur(BlurStyle.solid, 10),
-                            gradientBegin: Alignment.bottomLeft,
-                            gradientEnd: Alignment.topRight,
+          StreamBuilder<Map<String, dynamic>>(
+            stream: _getMetricsStream(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              final metrics = snapshot.data ?? {};
+
+              // Parse metrics with safe conversion
+              final sleepHours =
+                  int.tryParse(metrics['sleepHours']?.toString() ?? '0') ?? 0;
+              final heartRate =
+                  int.tryParse(metrics['heartRate']?.toString() ?? '0') ?? 0;
+              final bloodPressure =
+                  int.tryParse(metrics['bloodPressure']?.toString() ?? '0') ??
+                      0;
+              final bloodOxygen =
+                  int.tryParse(metrics['bloodOxygen']?.toString() ?? '0') ?? 0;
+              final weight =
+                  double.tryParse(metrics['weight']?.toString() ?? '0.0') ??
+                      0.0;
+              final stress =
+                  int.tryParse(metrics['stress']?.toString() ?? '0') ?? 0;
+
+              return SingleChildScrollView(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      const SizedBox(height: 25), // Increased top padding
+                      // Replace Image.asset with Stack for water effect
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            height: 200,
+                            width: 200,
+                            child: WaveWidget(
+                              config: CustomConfig(
+                                gradients: isDark
+                                    ? [
+                                        [Colors.blue[900]!, Colors.blue[800]!],
+                                        [Colors.blue[800]!, Colors.blue[700]!],
+                                        [Colors.blue[700]!, Colors.blue[600]!],
+                                      ]
+                                    : [
+                                        [Colors.blue[400]!, Colors.blue[300]!],
+                                        [Colors.blue[300]!, Colors.blue[200]!],
+                                        [Colors.blue[200]!, Colors.blue[100]!],
+                                      ],
+                                durations: [19440, 10800, 6000],
+                                heightPercentages: [0.65, 0.66, 0.68],
+                                blur:
+                                    const MaskFilter.blur(BlurStyle.solid, 10),
+                                gradientBegin: Alignment.bottomLeft,
+                                gradientEnd: Alignment.topRight,
+                              ),
+                              waveAmplitude: 0,
+                              size: const Size(200, 200),
+                            ),
                           ),
-                          waveAmplitude: 0,
-                          size: const Size(200, 200),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.asset(
+                              'assets/logo22.png',
+                              width: 200,
+                              height: 200,
+                              fit: BoxFit.cover,
+                            ),
+                            // child: ColorFiltered(
+                            //   colorFilter: ColorFilter.mode(
+                            //     isDark ? Colors.white : Colors.black,
+                            //     BlendMode.srcIn,
+                            //   ),
+                            //   child: Image.asset(
+                            //     'assets/logo.png',
+                            //     width: 200,
+                            //     height: 200,
+                            //     fit: BoxFit.cover,
+                            //   ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 60),
+                      // Wrap all rows in padding for consistent spacing
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Column(
+                          children: [
+                            // Sleep and Heart Rate Row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment
+                                  .center, // Added for vertical alignment
+                              children: [
+                                HealthTile(
+                                  value: sleepHours,
+                                  title: 'Sleep Hours',
+                                  color: AppColors.sleep, // Updated color
+                                  icon: Icons.bedtime,
+                                  unit: 'hrs',
+                                  isDark: isDark,
+                                ),
+                                HealthTile(
+                                  value: heartRate,
+                                  title: 'Heart Rate',
+                                  color: AppColors.heartRate, // Updated color
+                                  icon: Icons.favorite,
+                                  unit: 'bpm',
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+
+                            // Blood Pressure and Blood Oxygen Row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Blood Pressure Section
+                                HealthTile(
+                                  value: bloodPressure,
+                                  title: 'Blood Pressure',
+                                  color:
+                                      AppColors.bloodPressure, // Updated color
+                                  icon: Icons.speed,
+                                  unit: 'mmHg',
+                                  isDark: isDark,
+                                ),
+
+                                // Blood Oxygen Section
+                                HealthTile(
+                                  value: bloodOxygen,
+                                  title: 'Blood Oxygen',
+                                  color: AppColors.bloodOxygen, // Updated color
+                                  icon: Icons.air,
+                                  unit: '%',
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+
+                            // Weight and Stress Row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Weight Section
+                                HealthTile(
+                                  value: weight.toStringAsFixed(
+                                      1), // Format to 1 decimal place
+                                  title: 'Weight',
+                                  color: AppColors.weight, // Updated color
+                                  icon: Icons.monitor_weight,
+                                  unit: 'kg',
+                                  isDark: isDark,
+                                ),
+
+                                // Stress Section
+                                HealthTile(
+                                  value: stress,
+                                  title: 'Stress',
+                                  color: AppColors.stress, // Updated color
+                                  icon: Icons.psychology,
+                                  unit: '%',
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.asset(
-                          'assets/logo22.png',
-                          width: 200,
-                          height: 200,
-                          fit: BoxFit.cover,
+                      Text(
+                        'Statistics',
+                        style: AppFonts.h3.copyWith(
+                          color: isDark
+                              ? AppColors.textPrimaryDark
+                              : AppColors.textPrimary,
                         ),
-                        // child: ColorFiltered(
-                        //   colorFilter: ColorFilter.mode(
-                        //     isDark ? Colors.white : Colors.black,
-                        //     BlendMode.srcIn,
-                        //   ),
-                        //   child: Image.asset(
-                        //     'assets/logo.png',
-                        //     width: 200,
-                        //     height: 200,
-                        //     fit: BoxFit.cover,
-                        //   ),
                       ),
+                      const SizedBox(height: 20),
                     ],
                   ),
-                  const SizedBox(height: 60),
-                  // Wrap all rows in padding for consistent spacing
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Column(
-                      children: [
-                        // Sleep and Heart Rate Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment
-                              .center, // Added for vertical alignment
-                          children: [
-                            HealthTile(
-                              value: _sleepHours,
-                              title: 'Sleep Hours',
-                              color: AppColors.sleep, // Updated color
-                              icon: Icons.bedtime,
-                              unit: 'hrs',
-                              isDark: isDark,
-                              onUpdate: (value) =>
-                                  _updateMetric('sleepHours', value.toInt()),
-                            ),
-                            HealthTile(
-                              value: _heartRate,
-                              title: 'Heart Rate',
-                              color: AppColors.heartRate, // Updated color
-                              icon: Icons.favorite,
-                              unit: 'bpm',
-                              isDark: isDark,
-                              onUpdate: (value) =>
-                                  _updateMetric('heartRate', value.toInt()),
-                            ),
-                          ],
-                        ),
-
-                        // Blood Pressure and Blood Oxygen Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Blood Pressure Section
-                            HealthTile(
-                              value: _bloodPressure,
-                              title: 'Blood Pressure',
-                              color: AppColors.bloodPressure, // Updated color
-                              icon: Icons.speed,
-                              unit: 'mmHg',
-                              isDark: isDark,
-                              onUpdate: (value) =>
-                                  _updateMetric('bloodPressure', value.toInt()),
-                            ),
-
-                            // Blood Oxygen Section
-                            HealthTile(
-                              value: _bloodOxygen,
-                              title: 'Blood Oxygen',
-                              color: AppColors.bloodOxygen, // Updated color
-                              icon: Icons.air,
-                              unit: '%',
-                              isDark: isDark,
-                              onUpdate: (value) =>
-                                  _updateMetric('bloodOxygen', value.toInt()),
-                            ),
-                          ],
-                        ),
-
-                        // Weight and Stress Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Weight Section
-                            HealthTile(
-                              value: _weight.toStringAsFixed(
-                                  1), // Format to 1 decimal place
-                              title: 'Weight',
-                              color: AppColors.weight, // Updated color
-                              icon: Icons.monitor_weight,
-                              unit: 'kg',
-                              isDark: isDark,
-                              onUpdate: (value) =>
-                                  _updateMetric('weight', value.toDouble()),
-                            ),
-
-                            // Stress Section
-                            HealthTile(
-                              value: _stress,
-                              title: 'Stress',
-                              color: AppColors.stress, // Updated color
-                              icon: Icons.psychology,
-                              unit: '%',
-                              isDark: isDark,
-                              onUpdate: (value) =>
-                                  _updateMetric('stress', value.toInt()),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    'Statistics',
-                    style: AppFonts.h3.copyWith(
-                      color: isDark
-                          ? AppColors.textPrimaryDark
-                          : AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
           if (isValentine) _buildValentineOverlay(),
         ],

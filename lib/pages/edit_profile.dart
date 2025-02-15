@@ -88,11 +88,18 @@ class _EditProfileState extends State<EditProfile> {
                   _nameController,
                   (value) =>
                       value?.isEmpty ?? true ? 'Name is required' : null),
-              _buildTextField(
-                  'Email',
-                  _emailController,
-                  (value) =>
-                      value?.isEmpty ?? true ? 'Email is required' : null),
+              // Email field - read only
+              TextFormField(
+                controller: _emailController,
+                enabled: false, // Make it read-only
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  border: const OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Colors.grey[200],
+                ),
+              ),
+              const SizedBox(height: 16),
               _buildTextField(
                   'Phone',
                   _phoneController,
